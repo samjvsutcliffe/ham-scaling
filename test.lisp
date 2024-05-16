@@ -101,7 +101,7 @@
     ))
 
 (defun setup ()
-  (defparameter *sim* (setup-test-column '(8 8 8) '(8 8 8) 1 2))
+  (defparameter *sim* (setup-test-column (list (* *refine* 8) 8 8) (list (* *refine* 8) 8 8) 1 2))
   ;; (defparameter *sim* (setup-test-column '(1 1 1) '(1 1 1) 1 1))
   (format t "MPs: ~D~%" (length (cl-mpm:sim-mps *sim*)))
   (defparameter *run-sim* t)

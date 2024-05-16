@@ -5,6 +5,8 @@
 (restrict-compiler-policy 'debug 0 0)
 (restrict-compiler-policy 'safety 0 0)
 (setf *block-compile-default* t)
+(declaim (sb-ext:muffle-conditions cl:style-warning))
+(declaim (sb-ext:muffle-conditions sb-ext:compiler-note))
 (asdf:compile-system :cl-mpm :force t)
 (asdf:compile-system :cl-mpm/setup :force t)
 (asdf:compile-system :cl-mpm/particle :force t)
@@ -19,15 +21,17 @@
 (asdf:compile-system :cl-mpm/fastmath :force t)
 (asdf:compile-system :cl-mpm/mpi :force t)
 (ql:quickload :cl-mpm-worker)
+(in-package :cl-mpm-worker)
+(ql:quickload :magicl)
 (ql:quickload :cl-mpm/examples/joss)
 (ql:quickload :cl-mpm/mpi)
 (ql:quickload :parse-float)
-(in-package :cl-mpm-worker)
 
 
 (defun primary-main ()
   (load "test-mpi.lisp"))
 
+(sb-ext:gc :full t)
 (sb-ext:save-lisp-and-die
    "mpi-worker"
     :executable t

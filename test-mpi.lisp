@@ -1,8 +1,19 @@
+(declaim (sb-ext:muffle-conditions cl:style-warning))
+(declaim (sb-ext:muffle-conditions sb-ext:compiler-note))
+(defun setup-domain-decomp (sim)
+  (when (= (cl-mpi:mpi-comm-rank) 0)
+    (format t "Starting domain decompose~%") )
+  (setf (cl-mpm/mpi::mpm-sim-mpi-domain-count sim)
+	    (list (floor (cl-mpi:mpi-comm-size)) 1 1))
+  (cl-mpm/mpi::domain-decompose sim)
+  (when (= (cl-mpi:mpi-comm-rank) 0)
+    (format t "Ending domain decompose~%")))
+
 (defun setup-test-column (size block-size &optional (e-scale 1) (mp-scale 1))
   (let* ((sim (cl-mpm/setup::make-block
                (/ 1d0 e-scale)
                (mapcar (lambda (x) (* x e-scale)) size)
-               :sim-type 'cl-mpm/mpi:mpm-sim-mpi
+               :sim-type 'cl-mpm/mpi:mpm-sim-mpi-nodes
                ))
          (h (cl-mpm/mesh:mesh-resolution (cl-mpm:sim-mesh sim)))
          (h-x (/ h 1d0))
@@ -12,6 +23,8 @@
          )
     (declare (double-float h density))
     (progn
+
+      (setup-domain-decomp sim)
       (let ()
         (setf (cl-mpm:sim-mps sim)
               (cl-mpm/setup::make-mps-from-list
@@ -20,8 +33,15 @@
                 block-size
                 (mapcar (lambda (e) (* e e-scale mp-scale)) block-size)
                 density
-                ;'cl-mpm/particle::particle-elastic-damage
                 'cl-mpm/particle::particle-elastic
+				:clip-func (lambda (x y z)
+				 (cl-mpm/mpi::in-computational-domain
+					sim
+					(cl-mpm/utils:vector-from-list
+						(list (float x 0d0)
+							  (float y 0d0)
+							  (float z 0d0)))))
+                ;'cl-mpm/particle::particle-elastic-damage
                 ;'cl-mpm/particle::particle-vm
                 :E 1d6
                 :nu 0.3d0
@@ -31,7 +51,7 @@
                 ))))
       (setf (cl-mpm:sim-damping-factor sim) (* 1d-3 density))
       (setf (cl-mpm::sim-mass-scale sim) 1d0)
-      (let ((dt-scale 1.0d0))
+      (let ((dt-scale 0.5d0))
         (setf
          (cl-mpm:sim-dt sim)
          (* dt-scale h
@@ -61,15 +81,18 @@
     (setf *refine* (parse-float:parse-float (uiop:getenv "REFINE")))))
 
 (defun setup ()
-  (defparameter *sim* (setup-test-column (list (* 8 *refine*) 9 8) (list (* 8 *refine*) 8 8) 1 2))
+  (defparameter *sim* (setup-test-column (list (* 16 *refine*) 2 1) 
+                                         (list (* 16 *refine*) 1 1) 1 2))
+  (setup-domain-decomp *sim*)
   (let ((rank (cl-mpi:mpi-comm-rank)))
-    (let ((dsize (floor (cl-mpi:mpi-comm-size))))
-      (setf (cl-mpm/mpi::mpm-sim-mpi-domain-count *sim*) (list dsize 1 1)))
-    (when (= rank 0)
-      (format t "Sim MPs: ~a~%" (length (cl-mpm:sim-mps *sim*)))
-      (format t "Decompose~%"))
-    (cl-mpm/mpi::domain-decompose *sim*)
-    (format t "Rank ~A - Sim MPs: ~a~%" rank (length (cl-mpm:sim-mps *sim*))))
+  ;  (let ((dsize (floor (cl-mpi:mpi-comm-size))))
+  ;    (setf (cl-mpm/mpi::mpm-sim-mpi-domain-count *sim*) (list dsize 1 1)))
+  (when (= rank 0)
+    (format t "Sim MPs: ~a~%" (length (cl-mpm:sim-mps *sim*))))
+  ;    (format t "Decompose~%"))
+  ;  (cl-mpm/mpi::domain-decompose *sim*)
+  (format t "Rank ~A - Sim MPs: ~a~%" rank (length (cl-mpm:sim-mps *sim*)))
+  )
   (defparameter *run-sim* t)
   (defparameter *t* 0)
   (defparameter *sim-step* 0))
@@ -134,23 +157,42 @@
          dt))))
 
 (declaim (notinline test))
-(defun test ()
+;(defun test ()
+;  (setup)
+;  ;(time) 
+;  ;(time (cl-mpm::update-sim *sim*))
+;  (time-form
+;   (cl-mpm::update-sim *sim*)
+;   10)
+;  )
+(let ((rank (cl-mpi:mpi-comm-rank)))
+  (when (= rank 0) 
+    (format t "Testing thread count: ~D ~%" *threads*)
+    (format t "Testing comm count: ~D ~%" (floor (cl-mpi:mpi-comm-size)))
+    )
+  (setf lparallel:*kernel* (lparallel:make-kernel *threads* :name "custom-kernel"))
+  (sb-ext:gc :full t)
+  (when (= rank 0) 
+    (room))
   (setup)
-  (time (cl-mpm::update-sim *sim*))
-  (time-form
-   (cl-mpm::update-sim *sim*)
-   100)
+  (when (= rank 0) 
+    (room))
+  (format t "Nodes: ~A~%" (type-of (cl-mpm/mesh:mesh-nodes (cl-mpm:sim-mesh *sim*))))
+  (sb-ext:gc :full t)
+  ;(time
+  ;  (dotimes (i 100)
+  ;    (cl-mpm::update-sim *sim*)))
+  (time-form (cl-mpm::update-sim *sim*) 100) 
+  (sb-ext:gc :full t)
+  (cl-mpm/output:save-vtk (uiop:merge-pathnames* "./output-mpi/" (format nil "sim_~5,'0d_~5,'0d.vtk" (cl-mpi:mpi-comm-size) rank)) *sim*)
+  ;(test)
+  ;;(sb-ext:gc :full t)
+  ;(test)
+  ;;(sb-ext:gc :full t)
+  ;(test)
+  (lparallel:end-kernel)
+  ;(sb-ext:gc :full t)
   )
-;; (format t "Threads ~D~%" *threads*)
-(format t "Testing thread count: ~D ~%" *threads*)
-(setf lparallel:*kernel* (lparallel:make-kernel *threads* :name "custom-kernel"))
-;; (cl-mpm::update-sim *sim*)
-
-(test)
-(test)
-(test)
-(lparallel:end-kernel)
-(sb-ext:gc :full t)
 ;(let ((max-threads *threads*))
 ;  (loop for i from 0 to (round (log *threads* 2))
 ;        do
