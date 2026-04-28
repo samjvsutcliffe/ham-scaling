@@ -16,19 +16,22 @@
 ;(setf cl-mpm/settings::*optimise-setting* cl-mpm/settings::*optimise-speed*)
 (setf cl-mpm/settings::*optimise-setting* cl-mpm/settings::*optimise-debug*)
 (ql:quickload :cl-mpm/examples/collapse)
+(ql:quickload :cl-mpm/mpi)
+(ql:quickload :cl-mpm/dynamic-relaxation-mpi)
 (ql:quickload :cl-mpm/implicit)
 (ql:quickload :serapeum)
-(in-package :cl-mpm/examples/collapse)
+(ql:quickload :cl-mpm-worker)
+(in-package :cl-mpm-worker)
 
 
-(defun main (&optional args)
-  (load "test.lisp"))
+(defun primary-main (&optional args)
+  (load "test-mpi.lisp"))
 
 (sb-ext:gc :full t)
 (sb-ext:save-lisp-and-die
    "mpi-worker"
     :executable t
     :toplevel #'main
-    :compression t
+    :compression nil
     :save-runtime-options t)
 (uiop:quit)

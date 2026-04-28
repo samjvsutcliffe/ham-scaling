@@ -50,7 +50,7 @@
   (setf (cl-mpm/mpi::mpm-sim-mpi-domain-count sim)
 	    (list (floor (cl-mpi:mpi-comm-size)) 1 1))
   (cl-mpm/mpi::domain-decompose sim)
-  (cl-mpm/mpi::load-balance-algo sim :dims (:x :y))
+  (cl-mpm/mpi::load-balance-algo sim :dims '(:x :y))
   (when (= (cl-mpi:mpi-comm-rank) 0)
     (format t "Ending domain decompose~%")))
 
@@ -59,6 +59,7 @@
   (setup
     :refine (round *refine*)
     :mps 3)
+  (change-class *sim* 'cl-mpm/dynamic-relaxation::mpm-sim-dr-mpi)
   (setup-domain-decomp *sim*)
   (setf (cl-mpm/aggregate::sim-enable-aggregate *sim*) nil 
       (cl-mpm::sim-ghost-factor *sim*) nil
