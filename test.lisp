@@ -1,17 +1,19 @@
+;(ql:quickload :cl-mpm/examples/collapse)
+;(ql:quickload :cl-mpm/implicit)
+;(ql:quickload :serapeum)
 (in-package :cl-mpm/examples/collapse)
 
 (defparameter *sim* nil)
 (defparameter *run-sim* t)
 (defparameter *t* 0)
 (defparameter *sim-step* 0)
-(defparameter *refine* 0.5)
-(let ((refine (uiop:getenv "REFINE")))
-  (when refine
-    (setf *refine* (parse-integer (uiop:getenv "REFINE")))  
-    ))
 
+(defparameter *name* (let ((var (uiop:getenv "NAME"))) (if var var "standard")))
+(defparameter *refine* (let ((var (uiop:getenv "REFINE"))) (parse-float:parse-float (if var var "1"))))
+(defparameter *threads* (let ((var (uiop:getenv "OMP_NUM_THREADS"))) (parse-integer (if var var "1"))))
 (defparameter *solver* (let ((var (uiop:getenv "SOLVER"))) (if var var "DR")))
 (defparameter *solver-hash* (serapeum:dict "DR" 'cl-mpm/dynamic-relaxation::mpm-sim-quasi-static "IMPLICIT" 'cl-mpm/implicit::mpm-sim-implicit))
+(setf lparallel:*kernel* (lparallel:make-kernel *threads* :name "custom-kernel"))
 
 
 (defun run-auto-strong ()
@@ -41,53 +43,45 @@
                      ))))
   (cl-mpm/output:save-vtk (merge-pathnames (format nil "output/sim_~5,'0d.vtk" *sim-step*)) *sim*))
 
-
-(defparameter *threads* 1)
-(let ((threads (uiop:getenv "OMP_NUM_THREADS")))
-    (when threads
-          (setf *threads* (parse-integer threads))))
-
-;; (push (lambda ()
-;;         (format t "Closing kernel~%")
-;;         (lparallel:end-kernel))
-;;       sb-ext:*exit-hooks*)
-;(setup)
-;(run)
-
-(defmacro time-form (form it)
-  `(progn
-     (declaim (optimize speed))
-     (let* ((iterations ,it)
-            (start (get-internal-real-time)))
-       (dotimes (i ,it)
-         ,form)
-       (let* ((end (get-internal-real-time))
-              (units internal-time-units-per-second)
-              (dt (float (/ (- end start) (* iterations units)) 0d0))
-              )
-         (format t "Total time: ~f ~%" (/ (- end start) units)) (format t "Time per iteration: ~f~%" (/ (- end start) (* iterations units)))
-         (if (> dt 0)
-             (format t "Throughput: ~f - MPs throughput: ~E~%" (/ 1 dt) (/ (length (cl-mpm:sim-mps *sim*)) dt))
-             (format t "Bad sample - 0 time taken~%")
-             )
-         dt))))
-
 (declaim (notinline test))
 (defun test ()
   (setup
-    :refine *refine*
+    :refine (round *refine*)
     :mps 3)
-  (change-class *sim* (gethash *solver* *solver-hash*))
-  (time-form (cl-mpm::update-sim *sim*) 1)
-  (let ((dt-test 0d0))
-    (setf dt-test
-      (time-form
-       (cl-mpm::update-sim *sim*)
-       10))
+  ;(format t "Changing class ~A~%" (gethash *solver* *solver-hash*))
+  ;(change-class *sim* (gethash *solver* *solver-hash*))
+  (setf (cl-mpm/aggregate::sim-enable-aggregate *sim*) nil 
+      (cl-mpm::sim-ghost-factor *sim*) nil
+      (cl-mpm::sim-enable-fbar *sim*) nil)
+  ;(setf (cl-mpm/dynamic-relaxation::sim-mass-update-count *sim*) 1)
+
+  (setf (cl-mpm::sim-gravity *sim*) 0d0)
+  (cl-mpm:update-sim *sim*)
+  (let ((mesh (cl-mpm:sim-mesh *sim*))
+        (mps (cl-mpm::sim-mps *sim*))
+        (dt 1d0))
+    (let ((dt-test 0d0)
+          (iters 100))
+      ;(setf dt-test 1d0)
+      (setf dt-test
+            (time-form
+              iters
+              (progn
+                ;(cl-mpm::update-sim *sim*)
+                (cl-mpm::update-stress mesh mps 1d0 nil)
+                )))
+      (with-open-file (stream  *data-file* :direction :output :if-exists :append)
+        (format stream "~A,~D,~E,~E,~E~%" *solver* *threads* (float *refine* 0e0) 
+                (float (/ 1d0 dt-test) 0e0) 
+                (float (/ (length (cl-mpm:sim-mps *sim*)) dt-test)
+                       0e0)))))
+  
   )
-  )
+(defparameter *data-file* (merge-pathnames (format nil "data_~A.csv" *name*)))
+(with-open-file (stream *data-file* :direction :output :if-exists nil)
+    (format stream "solver,threads,refine,throughput,mp-throughput~%"))
 (format t "Testing thread count: ~D ~%" *threads*)
-(setf lparallel:*kernel* (lparallel:make-kernel *threads* :name "custom-kernel"))
+(format t "Testing refine: ~E ~%" *refine*)
 (test)
 (test)
 (test)
