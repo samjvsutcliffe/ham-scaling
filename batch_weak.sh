@@ -12,7 +12,7 @@ module load aocl/5.0.0
 module load mvapich2
 export MV2_ENABLE_AFFINITY=0
 
-#sbcl --dynamic-space-size 64000 --load "build_step.lisp"
+sbcl --dynamic-space-size 64000 --load "build_step.lisp"
 
 echo "Running code"
 rm data_WEAK.csv
@@ -28,8 +28,8 @@ do
     do
         #echo $t
         export OMP_NUM_THREADS=$(bc<<< "$r*$r")
-        export REFINE=$r
+        export REFINE=$(bc<<< "$INITIAL_REFINE*$r")
         echo $REFINE
-        ./mpi-worker
+        ./worker
     done
 done

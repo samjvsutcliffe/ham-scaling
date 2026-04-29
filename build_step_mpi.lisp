@@ -1,8 +1,8 @@
 (sb-ext:restrict-compiler-policy 'speed 3 3)
 (sb-ext:restrict-compiler-policy 'debug 0 0)
 (sb-ext:restrict-compiler-policy 'safety 0 0)
-(declaim (sb-ext:muffle-conditions sb-ext:compiler-note))
 (setf *block-compile-default* t)
+(declaim (sb-ext:muffle-conditions sb-ext:compiler-note))
 
 ;(sb-ext:restrict-compiler-policy 'speed 0 0)
 ;(sb-ext:restrict-compiler-policy 'debug 3 3)
@@ -24,12 +24,12 @@
 (in-package :cl-mpm-worker)
 
 
-(defun main (&optional args)
-  (load "test.lisp"))
+(defun primary-main (&optional args)
+  (load "test-mpi.lisp"))
 
 (sb-ext:gc :full t)
 (sb-ext:save-lisp-and-die
-   "worker"
+   "mpi-worker"
     :executable t
     :toplevel #'main
     :compression t

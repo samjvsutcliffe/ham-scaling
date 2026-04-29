@@ -29,6 +29,6 @@ do
     do
         echo $t
         export OMP_NUM_THREADS=$t
-        ./mpi-worker
+        ./worker
     done
 done
