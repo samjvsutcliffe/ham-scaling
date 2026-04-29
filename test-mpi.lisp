@@ -15,39 +15,14 @@
 (defparameter *solver-hash* (serapeum:dict "DR" 'cl-mpm/dynamic-relaxation::mpm-sim-quasi-static "IMPLICIT" 'cl-mpm/implicit::mpm-sim-implicit))
 (setf lparallel:*kernel* (lparallel:make-kernel *threads* :name "custom-kernel"))
 
-
-(defun run-auto-strong ()
-  (cl-mpm/output:save-vtk-mesh (merge-pathnames "output/mesh.vtk")
-                          *sim*)
-  (let* ((target-time 0.1d0)
-         (dt (cl-mpm:sim-dt *sim*))
-         (substeps (floor target-time dt)))
-    (format t "Substeps ~D~%" substeps)
-    (time (loop for steps from 0 to 40
-                while *run-sim*
-                do
-                   (progn
-                     (format t "Step ~d ~%" steps)
-                     (cl-mpm/output:save-vtk (merge-pathnames (format nil "output/sim_~5,'0d.vtk" *sim-step*)) *sim*)
-                     (time
-                      (dotimes (i substeps)
-                        (cl-mpm::update-sim *sim*)
-                        (setf *t* (+ *t* (cl-mpm::sim-dt *sim*)))))
-                     ;; (setf (cl-mpm:sim-damping-factor *sim*)
-                     ;;       (* (cl-mpm:sim-damping-factor *sim*) (expt 1d-3 1/40)))
-
-                     (incf *sim-step*)
-                     ;; (plot *sim*)
-                     ;(cl-mpm/plotter:simple-plot-3d *sim* :colour-func (lambda (mp) (cl-mpm/utils:get-stress (cl-mpm/particle::mp-stress mp) :xx)))
-                     ;(swank.live:update-swank)
-                     ))))
-  (cl-mpm/output:save-vtk (merge-pathnames (format nil "output/sim_~5,'0d.vtk" *sim-step*)) *sim*))
+(when (= (cl-mpi:mpi-comm-rank) 0)
+    (format t "Starting test~%") )
 
 
 (defun setup-domain-decomp (sim)
   (setf cl-mpm/mpi::*prune-nodes* nil)
   (when (= (cl-mpi:mpi-comm-rank) 0)
-    (format t "Starting domain decompose~%") )
+    (format t "Starting domain decompose~%"))
   (setf (cl-mpm/mpi::mpm-sim-mpi-domain-count sim)
 	    (list (floor (cl-mpi:mpi-comm-size)) 1 1))
   (cl-mpm/mpi::domain-decompose sim)
@@ -79,15 +54,16 @@
             (time-form
               iters
               (progn
-                ;(cl-mpm::update-sim *sim*)
-                (cl-mpm::update-stress mesh mps 1d0 nil)
+                (cl-mpm::update-sim *sim*)
+                ;(cl-mpm::update-stress mesh mps 1d0 nil)
                 )))
-      (when (= (cl-mpi:mpi-comm-rank) 0) 
-        (with-open-file (stream  *data-file* :direction :output :if-exists :append)
-          (format stream "~A,~D,~E,~E,~E~%" *solver* *threads* (float *refine* 0e0) 
-                  (float (/ 1d0 dt-test) 0e0) 
-                  (float (/ (length (cl-mpm:sim-mps *sim*)) dt-test)
-                         0e0)))))))
+      (let ((mp-count (cl-mpm/mpi::mpi-sum (float (length (cl-mpm:sim-mps *sim*)) 0d0))))
+        (when (= (cl-mpi:mpi-comm-rank) 0) 
+          (with-open-file (stream  *data-file* :direction :output :if-exists :append)
+            (format stream "~A,~D,~E,~E,~E~%" *solver* *threads* (float *refine* 0e0) 
+                    (float (/ 1d0 dt-test) 0e0) 
+                    (float (/ mp-count dt-test)
+                           0e0))))))))
 
 (defparameter *data-file* (merge-pathnames (format nil "data_~A.csv" *name*)))
 
