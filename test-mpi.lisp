@@ -45,6 +45,7 @@
 
 
 (defun setup-domain-decomp (sim)
+  (setf cl-mpm/mpi::*prune-nodes* nil)
   (when (= (cl-mpi:mpi-comm-rank) 0)
     (format t "Starting domain decompose~%") )
   (setf (cl-mpm/mpi::mpm-sim-mpi-domain-count sim)
@@ -59,9 +60,9 @@
   (setup
     :refine (round *refine*)
     :mps 3)
-  (change-class *sim* 'cl-mpm/dynamic-relaxation::mpm-sim-dr-mpi)
+  (change-class *sim* 'cl-mpm/dynamic-relaxation::mpm-sim-quasi-static-mpi)
   (setup-domain-decomp *sim*)
-  (setf (cl-mpm/aggregate::sim-enable-aggregate *sim*) nil 
+  (setf (cl-mpm/aggregate::sim-enable-aggregate *sim*) nil
       (cl-mpm::sim-ghost-factor *sim*) nil
       (cl-mpm::sim-enable-fbar *sim*) nil)
   ;(setf (cl-mpm/dynamic-relaxation::sim-mass-update-count *sim*) 1)
