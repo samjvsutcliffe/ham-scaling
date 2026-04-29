@@ -26,9 +26,33 @@
   (setf (cl-mpm/mpi::mpm-sim-mpi-domain-count sim)
 	    (list (floor (cl-mpi:mpi-comm-size)) 1 1))
   (cl-mpm/mpi::domain-decompose sim)
-  (cl-mpm/mpi::load-balance-algo sim :dims '(:x :y))
+  (cl-mpm/mpi::load-balance-algo sim)
   (when (= (cl-mpi:mpi-comm-rank) 0)
     (format t "Ending domain decompose~%")))
+
+(defun get-mps-length (sim)
+  (round (cl-mpm/mpi::mpi-sum (float (length (cl-mpm:sim-mps sim)) 0d0))))
+
+(defmacro time-form-mpi (it form)
+  `(progn
+     (declaim (optimize speed))
+     (let* ((iterations ,it)
+            (start (get-internal-real-time)))
+       (time
+        (progn
+          (dotimes (i ,it)
+            ,form)
+          (cl-mpi:mpi-waitall)))
+       (let* ((end (get-internal-real-time))
+              (units internal-time-units-per-second)
+              (dt (/ (- end start) (* iterations units))))
+
+         (let ((mps-length (get-mps-length *sim*)))
+           (when (= (cl-mpi:mpi-comm-rank) 0)
+             (format t "Total time: ~f ~%" (/ (- end start) units)) (format t "Time per iteration: ~f~%" (/ (- end start) (* iterations units)))
+             (format t "Throughput: ~f~%" (/ 1 dt))
+             (format t "Time per MP: ~E~%" (/ dt mps-length))))
+         dt))))
 
 (declaim (notinline test))
 (defun test ()
@@ -51,13 +75,13 @@
           (iters 100))
       ;(setf dt-test 1d0)
       (setf dt-test
-            (time-form
+            (time-form-mpi
               iters
               (progn
                 (cl-mpm::update-sim *sim*)
                 ;(cl-mpm::update-stress mesh mps 1d0 nil)
                 )))
-      (let ((mp-count (cl-mpm/mpi::mpi-sum (float (length (cl-mpm:sim-mps *sim*)) 0d0))))
+      (let ((mp-count (get-mps-length *sim*)))
         (when (= (cl-mpi:mpi-comm-rank) 0) 
           (with-open-file (stream  *data-file* :direction :output :if-exists :append)
             (format stream "~A,~D,~E,~E,~E~%" *solver* *threads* (float *refine* 0e0) 
