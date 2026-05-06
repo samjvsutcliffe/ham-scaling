@@ -32,6 +32,6 @@
    "mpi-worker"
     :executable t
     :toplevel #'main
-    :compression nil
-    :save-runtime-options t)
+    :compression t
+    :save-runtime-options nil)
 (uiop:quit)

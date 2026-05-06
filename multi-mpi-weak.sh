@@ -5,7 +5,7 @@ module load aocl/5.0.0
 module load mvapich2
 export MV2_ENABLE_AFFINITY=0
 set -e
-sbcl --dynamic-space-size 8000 --disable-debugger --load "build_step_mpi.lisp"
+sbcl --dynamic-space-size 8000 --load "build_step_mpi.lisp"
 set +e
 rm data_MPI_WEAK.csv
 echo "solver,threads,refine,throughput,mp-throughput" >> data_MPI_WEAK.csv
