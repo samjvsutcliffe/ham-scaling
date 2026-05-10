@@ -33,6 +33,6 @@
     :executable t
     :toplevel #'main
     :compression t
-    :accept-runtime-options t
+    ;:accept-runtime-options t
     :save-runtime-options nil)
 (uiop:quit)

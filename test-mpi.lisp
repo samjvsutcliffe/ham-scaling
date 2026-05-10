@@ -61,11 +61,13 @@
   `(progn
      (declaim (optimize speed))
      (let* ((iterations ,it)
-            (start (get-internal-real-time)))
+            (start (get-internal-real-time))
+            (end-rank 0))
        (time
         (progn
           (dotimes (i ,it)
             ,form)
+          ;(setf (end (get-internal-real-time)))
           (cl-mpi:mpi-waitall)))
        (let* ((end (get-internal-real-time))
               (units internal-time-units-per-second)
@@ -75,23 +77,22 @@
            (when (= (cl-mpi:mpi-comm-rank) 0)
              (format t "Total time: ~f ~%" (/ (- end start) units)) (format t "Time per iteration: ~f~%" (/ (- end start) (* iterations units)))
              (format t "Throughput: ~f~%" (/ 1 dt))
-             (format t "Time per MP: ~E~%" (/ dt mps-length))))
+             (format t "Time per MP: ~E~%" (/ dt mps-length)))
+           ;(format t "Rank-throughput - throughput: ~f~%" (/ 1 dt))
+           
+           )
          dt))))
 
 (declaim (notinline test))
 (defun test ()
+  (cl-mpi:mpi-waitall)
   (setup
     :refine (round *refine*)
     :mps 3)
   (change-class *sim* 'cl-mpm/dynamic-relaxation::mpm-sim-quasi-static-mpi)
   (setup-domain-decomp *sim*)
-  ;(let ((nodes (cl-mpm/mesh::mesh-nodes (cl-mpm:sim-mesh *sim*))))
-  ;  (loop for v across (make-array (array-total-size nodes)
-  ;                                 :element-type 'cl-mpm/mesh::node
-  ;                                 :displaced-to nodes)
-  ;        do (pprint v)))
-  ;(loop for rd in (cl-mpm/mpi::mpm-sim-mpi-halo-node-list *sim*)
-  ;      do (pprint rd))
+  (cl-mpm::domain-sort-mps *sim*)
+  (sb-ext:gc :full t)
 
   (setf (cl-mpm/aggregate::sim-enable-aggregate *sim*) nil
       (cl-mpm::sim-ghost-factor *sim*) nil
@@ -100,6 +101,7 @@
 
   (setf (cl-mpm::sim-gravity *sim*) 0d0)
   (cl-mpm:update-sim *sim*)
+  (cl-mpi:mpi-waitall)
   (let ((mesh (cl-mpm:sim-mesh *sim*))
         (mps (cl-mpm::sim-mps *sim*))
         (dt 1d0))
@@ -128,12 +130,9 @@
     (format stream "solver,threads,refine,throughput,mp-throughput~%"))
   (format t "Testing thread count: ~D ~%" *threads*)
   (format t "Testing refine: ~E ~%" *refine*))
-(test)
-(cl-mpi:mpi-waitall)
-(test)
-(cl-mpi:mpi-waitall)
-(test)
-(cl-mpi:mpi-waitall)
+
+(dotimes (i 10)
+  (test))
 (lparallel:end-kernel)
 (sb-ext:gc :full t)
 ;(let ((max-threads *threads*))

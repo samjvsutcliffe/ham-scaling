@@ -27,6 +27,11 @@
          (mr (list hr h-0))
          (refine-0 2))
     (setf *sim* (setup-test-column mr mr sim-type refine-0 mps-per-dim multigrid-refine))) 
+  (cl-mpm:iterate-over-mps 
+    (cl-mpm:sim-mps *sim*)
+    (lambda (mp) 
+      (change-class mp 'cl-mpm/particle::particle-elastic)
+      (setf (cl-mpm/particle::mp-nu mp) 0d0)))
   (format t "MPs: ~D~%" (length (cl-mpm:sim-mps *sim*)))
   (format t "MPs per thread: ~F~%" (/ (length (cl-mpm:sim-mps *sim*)) *threads*))
   (defparameter *run-sim* t)
@@ -46,7 +51,7 @@
       (cl-mpm::sim-ghost-factor *sim*) nil
       (cl-mpm::sim-enable-fbar *sim*) nil)
   ;(setf (cl-mpm/dynamic-relaxation::sim-mass-update-count *sim*) 1)
-  (setf (cl-mpm::sim-gravity *sim*) 0d0)
+  (setf (cl-mpm::sim-gravity *sim*) -1d0)
   (format t "Starting test~%")
   (cl-mpm:update-sim *sim*)
   (format t "Prestep done~%")
@@ -60,6 +65,7 @@
             (time-form
               iters
               (progn
+                (cl-mpm::reset-node-displacement *sim*)
                 (cl-mpm::update-sim *sim*)
                 ;(cl-mpm::update-stress mesh mps 1d0 nil)
                 )))
