@@ -27,9 +27,9 @@
          (mr (list hr h-0))
          (refine-0 2))
     (setf *sim* (setup-test-column mr mr sim-type refine-0 mps-per-dim multigrid-refine))) 
-  (cl-mpm:iterate-over-mps 
+  (cl-mpm:iterate-over-mps
     (cl-mpm:sim-mps *sim*)
-    (lambda (mp) 
+    (lambda (mp)
       (change-class mp 'cl-mpm/particle::particle-elastic)
       (setf (cl-mpm/particle::mp-nu mp) 0d0)))
   (format t "MPs: ~D~%" (length (cl-mpm:sim-mps *sim*)))
@@ -47,7 +47,7 @@
   (cl-mpm::domain-sort-mps *sim*)
   (format t "Changing class ~A~%" (gethash *solver* *solver-hash*))
   (change-class *sim* (gethash *solver* *solver-hash*))
-  (setf (cl-mpm/aggregate::sim-enable-aggregate *sim*) nil 
+  (setf (cl-mpm/aggregate::sim-enable-aggregate *sim*) nil
       (cl-mpm::sim-ghost-factor *sim*) nil
       (cl-mpm::sim-enable-fbar *sim*) nil)
   ;(setf (cl-mpm/dynamic-relaxation::sim-mass-update-count *sim*) 1)
@@ -59,7 +59,8 @@
         (mps (cl-mpm::sim-mps *sim*))
         (dt 1d0))
     (let ((dt-test 0d0)
-          (iters 100))
+          (dt-solve 0d0)
+          (iters 10))
       ;(setf dt-test 1d0)
       (setf dt-test
             (time-form
@@ -67,13 +68,30 @@
               (progn
                 (cl-mpm::reset-node-displacement *sim*)
                 (cl-mpm::update-sim *sim*)
-                ;(cl-mpm::update-stress mesh mps 1d0 nil)
+                                        ;(cl-mpm::update-stress mesh mps 1d0 nil)
                 )))
+      (cl-mpm::reset-node-displacement *sim*)
+      (format t "Solve speed~%")
+      (setf
+       dt-solve
+       (time-form
+        1
+        (cl-mpm/dynamic-relaxation:converge-quasi-static
+         *sim*
+         :oobf-crit 1d-9
+         :energy-crit 1d0
+         :kinetic-damping nil
+         :damping-factor (sqrt 2d0)
+         :dt-scale 1d0
+         :substeps (if (string= *solver* "DR") 100 1)
+         :conv-steps 1000)))
       (with-open-file (stream  *data-file* :direction :output :if-exists :append)
-        (format stream "~A,~D,~E,~E,~E~%" *solver* *threads* (float *refine* 0e0) 
+        (format stream "~A,~D,~E,~E,~E,~E~%" *solver* *threads* (float *refine* 0e0) 
                 (float (/ 1d0 dt-test) 0e0) 
                 (float (/ (length (cl-mpm:sim-mps *sim*)) dt-test)
-                       0e0)))))
+                       0e0)
+                (float dt-solve 0e0)
+                ))))
   
   )
 (defparameter *data-file* (merge-pathnames (format nil "data_~A.csv" *name*)))
