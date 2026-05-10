@@ -96,7 +96,7 @@
   )
 (defparameter *data-file* (merge-pathnames (format nil "data_~A.csv" *name*)))
 (with-open-file (stream *data-file* :direction :output :if-exists nil)
-    (format stream "solver,threads,refine,throughput,mp-throughput~%"))
+    (format stream "solver,threads,refine,throughput,mp-throughput,dt-solve~%"))
 (format t "Testing thread count: ~D ~%" *threads*)
 (format t "Testing refine: ~E ~%" *refine*)
 (dotimes (i 5)
